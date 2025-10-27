@@ -5,11 +5,12 @@ import {
   TrendingUp, Users, Clock, DollarSign, Eye,
   Printer, Share2, Search
 } from 'lucide-react';
-import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar, 
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
+import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { getAnalytics, updateAnalyticsFromCurrentData, generateTimeSeriesData } from '../utils/analyticsManager';
@@ -60,41 +61,69 @@ function ReportsPage() {
   // Function to get therapist-specific analytics
   const getTherapistSpecificAnalytics = () => {
     const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    
+
     // Filter bookings for current therapist
-    const therapistBookings = allBookings.filter((booking: any) => 
+    const therapistBookings = allBookings.filter((booking: any) =>
       booking.therapistName === user?.name || booking.therapistId === user?.id
     );
-    
+
     const completedSessions = therapistBookings.filter((b: any) => b.status === 'completed');
     const totalSessions = therapistBookings.length;
     const pendingSessions = therapistBookings.filter((b: any) => b.status === 'pending_confirmation').length;
-    
+
     // Calculate revenue from therapist's completed bookings
     const totalRevenue = completedSessions.reduce((sum: number, booking: any) => {
       const amount = parseFloat(booking.amount?.replace('$', '') || '0');
       return sum + amount;
     }, 0);
-    
+
     // Calculate unique patients for this therapist
     const uniquePatients = new Set(therapistBookings.map((b: any) => b.patientId));
     const totalPatients = uniquePatients.size;
-    
+
     // Calculate this month's data
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const thisMonthBookings = therapistBookings.filter((b: any) => 
-      new Date(b.date || b.createdAt) >= oneMonthAgo
-    );
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const thisMonthBookings = therapistBookings.filter((b: any) => {
+      const bookingDate = new Date(b.date || b.createdAt);
+      return bookingDate.getMonth() === currentMonth && bookingDate.getFullYear() === currentYear;
+    });
+
     const monthlyRevenue = thisMonthBookings
       .filter((b: any) => b.status === 'completed')
       .reduce((sum: number, booking: any) => {
         const amount = parseFloat(booking.amount?.replace('$', '') || '0');
         return sum + amount;
       }, 0);
-    
+
+    // Calculate last month's revenue for growth comparison
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    const lastMonthBookings = therapistBookings.filter((b: any) => {
+      const bookingDate = new Date(b.date || b.createdAt);
+      return bookingDate.getMonth() === lastMonth && bookingDate.getFullYear() === lastMonthYear;
+    });
+
+    const lastMonthRevenue = lastMonthBookings
+      .filter((b: any) => b.status === 'completed')
+      .reduce((sum: number, booking: any) => {
+        const amount = parseFloat(booking.amount?.replace('$', '') || '0');
+        return sum + amount;
+      }, 0);
+
+    // Calculate revenue growth rate
+    let revenueGrowthRate = 0;
+    if (lastMonthRevenue > 0) {
+      revenueGrowthRate = ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100;
+    } else if (monthlyRevenue > 0) {
+      revenueGrowthRate = 100;
+    }
+
     const newPatientsThisMonth = new Set(thisMonthBookings.map((b: any) => b.patientId)).size;
-    
+
     return {
       overview: {
         totalSessions,
@@ -106,7 +135,7 @@ function ReportsPage() {
         newPatientsThisMonth,
         sessionCompletionRate: totalSessions > 0 ? (completedSessions.length / totalSessions) * 100 : 0,
         averageSessionValue: completedSessions.length > 0 ? totalRevenue / completedSessions.length : 0,
-        revenueGrowthRate: 18.2 // This could be calculated based on historical data
+        revenueGrowthRate: revenueGrowthRate
       }
     };
   };
@@ -187,21 +216,6 @@ function ReportsPage() {
     }
   ];
 
-  const generateNewReport = () => {
-    const newReport = {
-      id: `report-${Date.now()}`,
-      title: 'Custom Practice Report',
-      description: 'Comprehensive analysis of your practice performance',
-      lastGenerated: new Date().toISOString().split('T')[0],
-      type: 'PDF'
-    };
-    
-    // Generate report content
-    const reportContent = generateReportContent(newReport);
-    downloadGeneratedReport(reportContent, newReport.title);
-    
-    toast.success('New report generated and downloaded!');
-  };
 
   const viewReport = (report: any) => {
     // Generate and display report content
@@ -239,7 +253,7 @@ function ReportsPage() {
 
   const downloadReport = (report: any) => {
     const reportContent = generateReportContent(report);
-    downloadGeneratedReport(reportContent, report.title);
+    downloadGeneratedReport(reportContent, report.title, report.type);
     toast.success(`${report.title} downloaded successfully!`);
   };
 
@@ -397,200 +411,70 @@ function ReportsPage() {
     return content;
   };
 
-  const downloadGeneratedReport = (content: string, title: string) => {
+  const downloadGeneratedReport = (content: string, title: string, type: string = 'PDF') => {
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `${title.toLowerCase().replace(/\s+/g, '-')}-${timestamp}.html`;
-    
-    const fullContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${title}</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              padding: 20px; 
-              line-height: 1.6; 
-              max-width: 800px; 
-              margin: 0 auto;
-            }
-            h1 { 
-              color: #8B5CF6; 
-              border-bottom: 2px solid #8B5CF6; 
-              padding-bottom: 10px; 
-            }
-            h2 { 
-              color: #3B82F6; 
-              margin-top: 30px; 
-              margin-bottom: 15px;
-            }
-            .metric { 
-              background: #f8f9fa; 
-              padding: 15px; 
-              margin: 10px 0; 
-              border-radius: 8px; 
-              border-left: 4px solid #8B5CF6;
-            }
-            .highlight { 
-              background: #e7f3ff; 
-              padding: 3px 6px; 
-              border-radius: 4px; 
-              font-weight: bold;
-            }
-            ul { 
-              background: #f0f9ff; 
-              padding: 15px 30px; 
-              border-radius: 8px; 
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              padding: 20px;
-              background: linear-gradient(135deg, #8B5CF6, #3B82F6);
-              color: white;
-              border-radius: 10px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1 style="color: white; border: none; margin: 0;">${title}</h1>
-            <p style="margin: 5px 0 0 0;">Generated on ${new Date().toLocaleDateString()}</p>
-            <p style="margin: 5px 0 0 0;">Therapist: ${user?.name}</p>
-          </div>
-          ${content}
-          <hr style="margin: 40px 0;">
-          <p style="text-align: center; color: #666; font-size: 12px;">
-            Generated by MindCare Platform • ${new Date().toLocaleDateString()}
-          </p>
-        </body>
-      </html>
-    `;
-    
-    const blob = new Blob([fullContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
 
-  const exportAllReports = () => {
-    if (!analytics) {
-      toast.error('No analytics data available');
-      return;
-    }
+    if (type === 'Excel') {
+      // Generate CSV format for Excel
+      const csvContent = generateCSVContent(title);
+      const filename = `${title.toLowerCase().replace(/\s+/g, '-')}-${timestamp}.csv`;
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      // Generate PDF-style HTML that can be printed to PDF
+      const filename = `${title.toLowerCase().replace(/\s+/g, '-')}-${timestamp}.pdf.html`;
 
-    try {
-      const timestamp = new Date().toISOString().split('T')[0];
-      
-      // Generate comprehensive report with all data
-      const comprehensiveContent = `
-        <div class="header">
-          <h1 style="color: white; border: none; margin: 0;">Complete Practice Analytics Report</h1>
-          <p style="margin: 5px 0 0 0;">Generated on ${new Date().toLocaleDateString()}</p>
-          <p style="margin: 5px 0 0 0;">Therapist: ${user?.name}</p>
-        </div>
-        
-        <h2>Executive Summary</h2>
-        <div class="metric">
-          <strong>Practice Overview:</strong> Your practice has conducted <span class="highlight">${analytics.overview.totalSessions}</span> 
-          sessions with <span class="highlight">${analytics.overview.totalPatients}</span> patients, generating 
-          <span class="highlight">$${analytics.overview.totalRevenue.toLocaleString()}</span> in total revenue.
-        </div>
-        
-        <h2>Key Performance Indicators</h2>
-        <div class="metric">
-          <strong>Session Completion Rate:</strong> <span class="highlight">${analytics.overview.sessionCompletionRate.toFixed(1)}%</span>
-        </div>
-        <div class="metric">
-          <strong>Average Session Value:</strong> <span class="highlight">$${analytics.overview.averageSessionValue.toFixed(2)}</span>
-        </div>
-        <div class="metric">
-          <strong>Monthly Revenue:</strong> <span class="highlight">$${analytics.overview.monthlyRevenue.toLocaleString()}</span>
-        </div>
-        <div class="metric">
-          <strong>Revenue Growth Rate:</strong> <span class="highlight">+${analytics.overview.revenueGrowthRate}%</span>
-        </div>
-        
-        <h2>Patient Progress Analysis</h2>
-        ${patientProgress.map(p => `
-          <div class="metric">
-            <strong>${p.name}:</strong> <span class="highlight">${p.value}%</span> of your patients
-          </div>
-        `).join('')}
-        
-        <h2>Monthly Performance Trends</h2>
-        ${timeSeriesData.map(data => `
-          <div class="metric">
-            <strong>${data.month}:</strong> ${data.sessions} sessions completed, $${data.revenue.toLocaleString()} revenue generated
-          </div>
-        `).join('')}
-        
-        <h2>Practice Insights & Recommendations</h2>
-        <ul>
-          <li><strong>Strengths:</strong> High session completion rate indicates effective therapeutic approach</li>
-          <li><strong>Growth Opportunity:</strong> Consider expanding availability to accommodate more patients</li>
-          <li><strong>Patient Care:</strong> Majority of patients showing positive progress</li>
-          <li><strong>Financial Health:</strong> Steady revenue growth with consistent session values</li>
-          <li><strong>Professional Development:</strong> Continue current therapeutic methods as they show strong results</li>
-        </ul>
-        
-        <h2>Next Steps</h2>
-        <ul>
-          <li>Monitor patients in the "Needs Attention" category for additional support</li>
-          <li>Consider group therapy sessions to increase capacity</li>
-          <li>Maintain current scheduling and session structure</li>
-          <li>Continue tracking patient progress for ongoing insights</li>
-        </ul>
-      `;
-      
-      const fullReport = `
+      const fullContent = `
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Complete Practice Analytics Report</title>
+            <title>${title}</title>
+            <meta charset="UTF-8">
             <style>
-              body { 
-                font-family: Arial, sans-serif; 
-                padding: 20px; 
-                line-height: 1.6; 
-                max-width: 800px; 
+              @media print {
+                body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+              }
+              body {
+                font-family: Arial, sans-serif;
+                padding: 20px;
+                line-height: 1.6;
+                max-width: 800px;
                 margin: 0 auto;
-                color: #333;
               }
-              h1 { 
-                color: #8B5CF6; 
-                border-bottom: 2px solid #8B5CF6; 
-                padding-bottom: 10px; 
+              h1 {
+                color: #8B5CF6;
+                border-bottom: 2px solid #8B5CF6;
+                padding-bottom: 10px;
               }
-              h2 { 
-                color: #3B82F6; 
-                margin-top: 30px; 
+              h2 {
+                color: #3B82F6;
+                margin-top: 30px;
                 margin-bottom: 15px;
               }
-              .metric { 
-                background: #f8f9fa; 
-                padding: 15px; 
-                margin: 10px 0; 
-                border-radius: 8px; 
+              .metric {
+                background: #f8f9fa;
+                padding: 15px;
+                margin: 10px 0;
+                border-radius: 8px;
                 border-left: 4px solid #8B5CF6;
               }
-              .highlight { 
-                background: #e7f3ff; 
-                padding: 3px 6px; 
-                border-radius: 4px; 
+              .highlight {
+                background: #e7f3ff;
+                padding: 3px 6px;
+                border-radius: 4px;
                 font-weight: bold;
-                color: #1e40af;
               }
-              ul { 
-                background: #f0f9ff; 
-                padding: 15px 30px; 
-                border-radius: 8px; 
-                margin: 15px 0;
+              ul {
+                background: #f0f9ff;
+                padding: 15px 30px;
+                border-radius: 8px;
               }
               .header {
                 text-align: center;
@@ -600,41 +484,94 @@ function ReportsPage() {
                 color: white;
                 border-radius: 10px;
               }
-              .footer {
+              .print-instructions {
+                background: #fef3c7;
+                border: 2px solid #fbbf24;
+                padding: 15px;
+                margin: 20px 0;
+                border-radius: 8px;
                 text-align: center;
-                margin-top: 40px;
-                padding: 20px;
-                border-top: 1px solid #e5e7eb;
-                color: #666;
-                font-size: 12px;
               }
             </style>
           </head>
           <body>
-            ${comprehensiveContent}
-            <div class="footer">
-              Generated by MindCare Platform • ${new Date().toLocaleDateString()} • Confidential Report
+            <div class="print-instructions">
+              <strong>To save as PDF:</strong> Press Ctrl+P (Cmd+P on Mac), then select "Save as PDF" as the printer destination.
             </div>
+            <div class="header">
+              <h1 style="color: white; border: none; margin: 0;">${title}</h1>
+              <p style="margin: 5px 0 0 0;">Generated on ${new Date().toLocaleDateString()}</p>
+              <p style="margin: 5px 0 0 0;">Therapist: ${user?.name}</p>
+            </div>
+            ${content}
+            <hr style="margin: 40px 0;">
+            <p style="text-align: center; color: #666; font-size: 12px;">
+              Generated by MindCare Platform • ${new Date().toLocaleDateString()}
+            </p>
           </body>
         </html>
       `;
-      
-      const blob = new Blob([fullReport], { type: 'text/html' });
+
+      const blob = new Blob([fullContent], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `complete-practice-report-${timestamp}.html`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
-      toast.success('Complete practice report exported successfully!');
-    } catch (error) {
-      toast.error('Failed to export reports');
-      console.error('Export error:', error);
+
+      // Also open in new window with print dialog
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      }
     }
   };
+
+  const generateCSVContent = (reportTitle: string) => {
+    if (!analytics) return 'No data available';
+
+    let csv = `Report: ${reportTitle}\n`;
+    csv += `Generated: ${new Date().toLocaleDateString()}\n`;
+    csv += `Therapist: ${user?.name}\n\n`;
+
+    // Key metrics
+    csv += 'Metric,Value\n';
+    csv += `Total Sessions,${analytics.overview.totalSessions}\n`;
+    csv += `Completed Sessions,${analytics.overview.completedSessions}\n`;
+    csv += `Pending Sessions,${analytics.overview.pendingSessions}\n`;
+    csv += `Total Patients,${analytics.overview.totalPatients}\n`;
+    csv += `New Patients This Month,${analytics.overview.newPatientsThisMonth}\n`;
+    csv += `Total Revenue,$${analytics.overview.totalRevenue.toFixed(2)}\n`;
+    csv += `Monthly Revenue,$${analytics.overview.monthlyRevenue.toFixed(2)}\n`;
+    csv += `Revenue Growth Rate,${analytics.overview.revenueGrowthRate.toFixed(1)}%\n`;
+    csv += `Session Completion Rate,${analytics.overview.sessionCompletionRate.toFixed(1)}%\n`;
+    csv += `Average Session Value,$${analytics.overview.averageSessionValue.toFixed(2)}\n\n`;
+
+    // Monthly trends
+    csv += 'Monthly Trends\n';
+    csv += 'Month,Sessions,Revenue\n';
+    timeSeriesData.forEach(data => {
+      csv += `${data.month},${data.sessions},$${data.revenue.toFixed(2)}\n`;
+    });
+    csv += '\n';
+
+    // Patient progress
+    csv += 'Patient Progress Distribution\n';
+    csv += 'Category,Percentage\n';
+    patientProgress.forEach(p => {
+      csv += `${p.name},${p.value}%\n`;
+    });
+
+    return csv;
+  };
+
   const stats = analytics ? [
     {
       title: 'Total Sessions',
@@ -653,7 +590,9 @@ function ReportsPage() {
     {
       title: 'Monthly Revenue',
       value: `$${analytics.overview.monthlyRevenue.toLocaleString()}`,
-      change: `+${analytics.overview.revenueGrowthRate}% from last month`,
+      change: analytics.overview.revenueGrowthRate >= 0
+        ? `+${analytics.overview.revenueGrowthRate.toFixed(1)}% from last month`
+        : `${analytics.overview.revenueGrowthRate.toFixed(1)}% from last month`,
       icon: DollarSign,
       color: 'from-purple-500 to-pink-500'
     },
@@ -694,12 +633,6 @@ function ReportsPage() {
               }`}>
                 Showing data for: {user?.name}
               </p>
-            </div>
-            <div className="flex space-x-2">
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-300">
-                <Download className="w-4 h-4" />
-                <span>Export All</span>
-              </button>
             </div>
           </div>
         </motion.div>
@@ -900,22 +833,6 @@ function ReportsPage() {
             }`}>
               Generated Reports
             </h3>
-            <div className="flex space-x-2">
-              <button 
-                onClick={() => generateNewReport()}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-300"
-              >
-                <FileText className="w-4 h-4" />
-                <span>Generate New</span>
-              </button>
-              <button 
-                onClick={() => exportAllReports()}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg hover:from-green-600 hover:to-teal-600 transition-all duration-300"
-              >
-                <Download className="w-4 h-4" />
-                <span>Export All</span>
-              </button>
-            </div>
           </div>
           
           <div className="grid md:grid-cols-2 gap-4">

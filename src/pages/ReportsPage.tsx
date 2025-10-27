@@ -534,6 +534,79 @@ function ReportsPage() {
     }
   };
 
+  const exportAllReports = () => {
+    if (!analytics) {
+      toast.error('No analytics data available');
+      return;
+    }
+
+    try {
+      const timestamp = new Date().toISOString().split('T')[0];
+
+      // Generate comprehensive report with all data
+      const comprehensiveContent = `
+        <h2>Executive Summary</h2>
+        <div class="metric">
+          <strong>Practice Overview:</strong> Your practice has conducted <span class="highlight">${analytics.overview.totalSessions}</span>
+          sessions with <span class="highlight">${analytics.overview.totalPatients}</span> patients, generating
+          <span class="highlight">$${analytics.overview.totalRevenue.toLocaleString()}</span> in total revenue.
+        </div>
+
+        <h2>Key Performance Indicators</h2>
+        <div class="metric">
+          <strong>Session Completion Rate:</strong> <span class="highlight">${analytics.overview.sessionCompletionRate.toFixed(1)}%</span>
+        </div>
+        <div class="metric">
+          <strong>Average Session Value:</strong> <span class="highlight">$${analytics.overview.averageSessionValue.toFixed(2)}</span>
+        </div>
+        <div class="metric">
+          <strong>Monthly Revenue:</strong> <span class="highlight">$${analytics.overview.monthlyRevenue.toLocaleString()}</span>
+        </div>
+        <div class="metric">
+          <strong>Revenue Growth Rate:</strong> <span class="highlight">${analytics.overview.revenueGrowthRate >= 0 ? '+' : ''}${analytics.overview.revenueGrowthRate.toFixed(1)}%</span>
+        </div>
+
+        <h2>Patient Progress Analysis</h2>
+        ${patientProgress.map(p => `
+          <div class="metric">
+            <strong>${p.name}:</strong> <span class="highlight">${p.value}%</span> of your patients
+          </div>
+        `).join('')}
+
+        <h2>Monthly Performance Trends</h2>
+        ${timeSeriesData.map(data => `
+          <div class="metric">
+            <strong>${data.month}:</strong> ${data.sessions} sessions completed, $${data.revenue.toLocaleString()} revenue generated
+          </div>
+        `).join('')}
+
+        <h2>Practice Insights & Recommendations</h2>
+        <ul>
+          <li><strong>Strengths:</strong> High session completion rate indicates effective therapeutic approach</li>
+          <li><strong>Growth Opportunity:</strong> Consider expanding availability to accommodate more patients</li>
+          <li><strong>Patient Care:</strong> Majority of patients showing positive progress</li>
+          <li><strong>Financial Health:</strong> ${analytics.overview.revenueGrowthRate >= 0 ? 'Positive' : 'Declining'} revenue trend with consistent session values</li>
+          <li><strong>Professional Development:</strong> Continue current therapeutic methods as they show strong results</li>
+        </ul>
+
+        <h2>Next Steps</h2>
+        <ul>
+          <li>Monitor patients in the "Needs Attention" category for additional support</li>
+          <li>Consider group therapy sessions to increase capacity</li>
+          <li>Maintain current scheduling and session structure</li>
+          <li>Continue tracking patient progress for ongoing insights</li>
+        </ul>
+      `;
+
+      downloadGeneratedReport(comprehensiveContent, 'Complete Practice Analytics Report', 'PDF');
+
+      toast.success('Complete practice report exported successfully!');
+    } catch (error) {
+      toast.error('Failed to export reports');
+      console.error('Export error:', error);
+    }
+  };
+
   const generateCSVContent = (reportTitle: string) => {
     if (!analytics) return 'No data available';
 
@@ -633,6 +706,15 @@ function ReportsPage() {
               }`}>
                 Showing data for: {user?.name}
               </p>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => exportAllReports()}
+                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-300"
+              >
+                <Download className="w-4 h-4" />
+                <span>Export All</span>
+              </button>
             </div>
           </div>
         </motion.div>

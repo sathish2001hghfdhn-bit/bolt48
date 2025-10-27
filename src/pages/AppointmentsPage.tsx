@@ -127,6 +127,22 @@ function AppointmentsPage() {
     navigate(`/video-session/${appointmentId}`);
   };
 
+  const handleDeleteAppointment = (appointmentId: string) => {
+    if (!confirm('Are you sure you want to delete this appointment?')) {
+      return;
+    }
+
+    // Remove appointment from localStorage
+    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+    const updatedBookings = allBookings.filter((booking: any) => booking.id !== appointmentId);
+    localStorage.setItem('mindcare_bookings', JSON.stringify(updatedBookings));
+
+    // Update local state
+    setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
+
+    toast.success('Appointment deleted successfully');
+  };
+
   const filteredAppointments = appointments.filter(apt => {
     const matchesSearch = apt.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          apt.type.toLowerCase().includes(searchTerm.toLowerCase());
@@ -158,13 +174,6 @@ function AppointmentsPage() {
                 Manage your therapy sessions and patient appointments
               </p>
             </div>
-            <button
-              onClick={() => setShowNewAppointment(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-300"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Appointment</span>
-            </button>
           </div>
         </motion.div>
 
@@ -348,13 +357,11 @@ function AppointmentsPage() {
                   )}
                 </div>
                 <div className="flex space-x-2">
-                  <button className="p-2 text-gray-500 hover:text-blue-600 transition-colors">
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-                  <button className="p-2 text-gray-500 hover:text-green-600 transition-colors">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button className="p-2 text-gray-500 hover:text-red-600 transition-colors">
+                  <button
+                    onClick={() => handleDeleteAppointment(appointment.id)}
+                    className="p-2 text-gray-500 hover:text-red-600 transition-colors"
+                    title="Delete Appointment"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

@@ -274,13 +274,6 @@ function UsersPage() {
                 Manage all platform users and their permissions
               </p>
             </div>
-            <button
-              onClick={() => setShowUserModal(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-300"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add User</span>
-            </button>
           </div>
         </motion.div>
 

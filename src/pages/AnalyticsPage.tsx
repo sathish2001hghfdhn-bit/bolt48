@@ -21,6 +21,23 @@ function AnalyticsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [patientEngagement, setPatientEngagement] = useState<any[]>([]);
 
+  const formatTimeAgo = (milliseconds: number): string => {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+      return days === 1 ? '1 day ago' : `${days} days ago`;
+    } else if (hours > 0) {
+      return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+    } else if (minutes > 0) {
+      return minutes === 1 ? '1 minute ago' : `${minutes} minutes ago`;
+    } else {
+      return 'Just now';
+    }
+  };
+
   const loadAnalyticsData = () => {
     setIsLoading(true);
     
@@ -117,7 +134,7 @@ function AnalyticsPage() {
       const date = new Date();
       date.setDate(date.getDate() - (6 - i));
       const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-      
+
       return {
         day: dayName,
         sessions: Math.floor(Math.random() * 5) + 1,
@@ -125,6 +142,166 @@ function AnalyticsPage() {
         moduleUsage: Math.floor(Math.random() * 10) + 5
       };
     });
+
+    // Generate recent activity from actual data
+    const generateRecentActivity = () => {
+      const recentActivity = [];
+      const now = Date.now();
+
+      // Add recent bookings
+      const recentBookings = bookings
+        .sort((a: any, b: any) => {
+          const aTime = new Date(a.createdAt || a.date).getTime();
+          const bTime = new Date(b.createdAt || b.date).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 10);
+
+      recentBookings.forEach((booking: any) => {
+        const bookingTime = new Date(booking.createdAt || booking.date).getTime();
+        const timeDiff = now - bookingTime;
+        const timeAgo = formatTimeAgo(timeDiff);
+
+        if (booking.status === 'completed') {
+          recentActivity.push({
+            type: 'session',
+            description: `Therapy session completed with ${booking.patientName}`,
+            time: timeAgo,
+            timestamp: bookingTime
+          });
+        } else if (booking.status === 'confirmed') {
+          recentActivity.push({
+            type: 'session',
+            description: `Session confirmed for ${booking.patientName}`,
+            time: timeAgo,
+            timestamp: bookingTime
+          });
+        } else if (booking.status === 'pending_confirmation') {
+          recentActivity.push({
+            type: 'session',
+            description: `New booking request from ${booking.patientName}`,
+            time: timeAgo,
+            timestamp: bookingTime
+          });
+        }
+      });
+
+      // Add recent user registrations
+      registeredUsers
+        .sort((a: any, b: any) => {
+          const aTime = new Date(a.joinDate || a.createdAt || Date.now()).getTime();
+          const bTime = new Date(b.joinDate || b.createdAt || Date.now()).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 5)
+        .forEach((user: any) => {
+          const userTime = new Date(user.joinDate || user.createdAt || Date.now()).getTime();
+          const timeDiff = now - userTime;
+          const timeAgo = formatTimeAgo(timeDiff);
+
+          recentActivity.push({
+            type: 'user',
+            description: `New ${user.role} registered: ${user.name}`,
+            time: timeAgo,
+            timestamp: userTime
+          });
+        });
+
+      // Add recent therapist approvals
+      therapistServices
+        .filter((s: any) => s.status === 'approved')
+        .sort((a: any, b: any) => {
+          const aTime = new Date(a.createdAt || Date.now()).getTime();
+          const bTime = new Date(b.createdAt || Date.now()).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 3)
+        .forEach((service: any) => {
+          const serviceTime = new Date(service.createdAt || Date.now()).getTime();
+          const timeDiff = now - serviceTime;
+          const timeAgo = formatTimeAgo(timeDiff);
+
+          recentActivity.push({
+            type: 'therapist',
+            description: `Therapist service approved: ${service.therapistName || 'Therapist'}`,
+            time: timeAgo,
+            timestamp: serviceTime
+          });
+        });
+
+      // Add recent mood entries
+      moodEntries
+        .sort((a: any, b: any) => {
+          const aTime = new Date(a.date || Date.now()).getTime();
+          const bTime = new Date(b.date || Date.now()).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 3)
+        .forEach((entry: any) => {
+          const entryTime = new Date(entry.date || Date.now()).getTime();
+          const timeDiff = now - entryTime;
+          const timeAgo = formatTimeAgo(timeDiff);
+
+          recentActivity.push({
+            type: 'module',
+            description: `Mood tracker entry: ${entry.mood || 'neutral'}`,
+            time: timeAgo,
+            timestamp: entryTime
+          });
+        });
+
+      // Add recent CBT records
+      cbtRecords
+        .sort((a: any, b: any) => {
+          const aTime = new Date(a.createdAt || Date.now()).getTime();
+          const bTime = new Date(b.createdAt || Date.now()).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 3)
+        .forEach((record: any) => {
+          const recordTime = new Date(record.createdAt || Date.now()).getTime();
+          const timeDiff = now - recordTime;
+          const timeAgo = formatTimeAgo(timeDiff);
+
+          recentActivity.push({
+            type: 'module',
+            description: 'CBT thought record completed',
+            time: timeAgo,
+            timestamp: recordTime
+          });
+        });
+
+      // Add payment activities from completed bookings
+      bookings
+        .filter((b: any) => b.status === 'completed' && b.amount)
+        .sort((a: any, b: any) => {
+          const aTime = new Date(a.createdAt || a.date).getTime();
+          const bTime = new Date(b.createdAt || b.date).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 5)
+        .forEach((booking: any) => {
+          const bookingTime = new Date(booking.createdAt || booking.date).getTime();
+          const timeDiff = now - bookingTime;
+          const timeAgo = formatTimeAgo(timeDiff);
+
+          recentActivity.push({
+            type: 'payment',
+            description: `Payment processed: ${booking.amount}`,
+            time: timeAgo,
+            timestamp: bookingTime
+          });
+        });
+
+      // Sort all activities by timestamp and take top 10
+      const sortedActivity = recentActivity
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 10);
+
+      return sortedActivity.length > 0 ? sortedActivity : [
+        { type: 'session', description: 'No recent activity', time: 'Just now', timestamp: now }
+      ];
+    };
 
     const analytics = {
       overview: {
@@ -146,13 +323,7 @@ function AnalyticsPage() {
         weeklyActivity
       },
       therapists: therapistPerformance,
-      recentActivity: [
-        { type: 'session', description: 'New therapy session completed', time: '2 hours ago' },
-        { type: 'user', description: 'New patient registered', time: '4 hours ago' },
-        { type: 'payment', description: 'Payment processed: $120', time: '6 hours ago' },
-        { type: 'module', description: 'CBT module completed', time: '8 hours ago' },
-        { type: 'therapist', description: 'Therapist approved', time: '1 day ago' }
-      ]
+      recentActivity: generateRecentActivity()
     };
 
     setAnalyticsData(analytics);
